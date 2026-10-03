@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sweet Catch: Candy Drop</title>
+  <link href="https://fonts.googleapis.com/css2?family=Mali:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    /* =========================================================
+       CSS — ธีมสีพาสเทลน่ารัก
+       ========================================================= */
+
+    /* ตัวแปรสีหลัก: แก้ที่นี่ที่เดียว สีทั้งเกมจะเปลี่ยนตาม */
+    :root {
+      --pink:        #ffc8dd;
+      --pink-deep:   #ff8fab;
+      --blue:        #bde0fe;
+      --blue-deep:   #7fb8f0;
+      --purple:      #cdb4db;
+      --mint:        #b9fbc0;
+      --cream:       #fff8f0;
+      --text:        #6d5a72;
+      --white:       #ffffff;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      padding: 16px;
+      font-family: 'Mali', 'Segoe UI', sans-serif;
+      color: var(--text);
+      background: linear-gradient(135deg, var(--pink) 0%, var(--purple) 50%, var(--blue) 100%);
+    }
+
+    /* ---------- หัวข้อเกม ---------- */
+    .title {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--white);
+      text-shadow: 3px 3px 0 var(--pink-deep), 6px 6px 0 rgba(109, 90, 114, 0.15);
+      letter-spacing: 1px;
+      text-align: center;
+    }
+
+    /* ---------- กรอบพื้นที่เล่นเกม ---------- */
+    .game-wrapper {
+      position: relative;
+      width: min(400px, 100%);   /* ย่อตามจอมือถือได้ */
+      aspect-ratio: 2 / 3;       /* รักษาสัดส่วน 400x600 */
+      border: 6px solid var(--white);
+      border-radius: 28px;
+      overflow: hidden;
+      box-shadow: 0 14px 34px rgba(109, 90, 114, 0.28);
+      background: var(--cream);
+    }
+
+    /* ---------- Screen shake: เล่นเมื่อเสียพลังชีวิต ---------- */
+    .game-wrapper.shake { animation: shake 0.5s linear; }
+    @keyframes shake {
+      0%   { transform: translate(1px, 1px)   rotate(0deg);  }
+      10%  { transform: translate(-1px, -2px) rotate(-1deg); }
+      20%  { transform: translate(-3px, 0px)  rotate(1deg);  }
+      30%  { transform: translate(3px, 2px)   rotate(0deg);  }
+      40%  { transform: translate(1px, -1px)  rotate(1deg);  }
+      50%  { transform: translate(-1px, 2px)  rotate(-1deg); }
+      60%  { transform: translate(-3px, 1px)  rotate(0deg);  }
+      70%  { transform: translate(3px, 1px)   rotate(-1deg); }
+      80%  { transform: translate(-1px, -1px) rotate(1deg); }
+      90%  { transform: translate(1px, 2px)   rotate(0deg);  }
+      100% { transform: translate(1px, -2px)  rotate(-1deg); }
+    }
+
+    /* ---------- แฟลชสีแดงอมชมพูทับจอเมื่อโดนดาเมจ ---------- */
+    .damage-flash {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle, rgba(255, 143, 171, 0) 40%, rgba(255, 77, 120, 0.45) 100%);
+      opacity: 0;
+      pointer-events: none;
+    }
+    .damage-flash.active { animation: flash 0.45s ease-out; }
+    @keyframes flash {
+      0%   { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ---------- HUD: คะแนนและพลังชีวิต ---------- */
+    .hud {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      display: flex;
+      justify-content: space-between;
+      pointer-events: none;      /* ไม่บังการคลิก */
+    }
+
+    .hud-box {
+      background: rgba(255, 255, 255, 0.88);
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 1rem;
+      box-shadow: 0 4px 10px rgba(109, 90, 114, 0.15);
+    }
+
+    .hud-box .label { color: var(--pink-deep); margin-right: 4px; }
+
+    /* เอฟเฟกต์เด้งเมื่อค่ามีการเปลี่ยนแปลง */
+    .pop { animation: pop 0.3s ease; }
+    @keyframes pop {
+      50% { transform: scale(1.25); }
+    }
+
+    /* ---------- Overlay: หน้าเริ่มเกม / Game Over ---------- */
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      text-align: center;
+      padding: 24px;
+      background: rgba(255, 248, 240, 0.86);
+      backdrop-filter: blur(4px);
+    }
+
+    .overlay.hidden { display: none; }
+
+    .overlay .emoji-big {
+      font-size: 4rem;
+      animation: float 2s ease-in-out infinite;
+    }
+    @keyframes float {
+      50% { transform: translateY(-10px); }
+    }
+
+    .overlay h2 {
+      font-size: 2.2rem;
+      color: var(--pink-deep);
+    }
+
+    .overlay p { font-size: 1rem; line-height: 1.6; }
+
+    .final-score {
+      font-size: 1.4rem;
+      font-weight: 700;
+      background: var(--white);
+      padding: 10px 24px;
+      border-radius: 18px;
+      box-shadow: 0 4px 12px rgba(109, 90, 114, 0.15);
+    }
+    .final-score span { color: var(--blue-deep); font-size: 1.8rem; }
+
+    .final-level {
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    /* ---------- คำอธิบายไอเทมบนหน้า Start ---------- */
+    .legend {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--white);
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 0.95rem;
+      box-shadow: 0 3px 8px rgba(109, 90, 114, 0.12);
+    }
+    .legend-item.gold { color: #c99400; }
+    .legend-item.bomb { color: #3a3a3a; }
+
+    .dot {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .dot-gold {
+      background: radial-gradient(circle at 35% 35%, #fff6c2, #ffd447 50%, #e0a800);
+      box-shadow: 0 0 8px rgba(255, 200, 40, 0.9);
+    }
+    .dot-bomb {
+      background: radial-gradient(circle at 35% 35%, #666, #1a1a1a 70%);
+    }
+
+    .kbd {
+      display: inline-block;
+      background: var(--white);
+      border: 2px solid var(--purple);
+      border-radius: 8px;
+      padding: 0 8px;
+      font-weight: 700;
+    }
+
+    /* ---------- ปุ่ม ---------- */
+    .btn {
+      font-family: inherit;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--white);
+      background: linear-gradient(180deg, #ffa8c0, var(--pink-deep));
+      border: none;
+      border-radius: 999px;
+      padding: 12px 32px;
+      cursor: pointer;
+      box-shadow: 0 6px 0 #e07592, 0 10px 18px rgba(255, 143, 171, 0.4);
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
+    }
+    .btn:hover  { transform: translateY(-2px); }
+    .btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #e07592; }
+
+    .hint {
+      font-size: 0.9rem;
+      color: var(--white);
+      text-shadow: 1px 1px 0 rgba(109, 90, 114, 0.4);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- =========================================================
+       โครงสร้าง HTML
+       ========================================================= -->
+
+  <h1 class="title">🍬 Sweet Catch: Candy Drop 🍭</h1>
+
+  <div class="game-wrapper" id="gameWrapper">
+
+    <!-- พื้นที่เล่นเกม (ขนาดภายใน 400x600) -->
+    <canvas id="gameCanvas" width="400" height="600"></canvas>
+
+    <!-- เลเยอร์แฟลชเมื่อโดนดาเมจ -->
+    <div class="damage-flash" id="damageFlash"></div>
+
+    <!-- HUD: แสดงคะแนนและพลังชีวิต -->
+    <div class="hud">
+      <div class="hud-box"><span class="label">Score</span><span id="scoreText">0</span></div>
+      <div class="hud-box" id="livesText">❤️❤️❤️</div>
+    </div>
+
+    <!-- หน้าจอเริ่มเกม -->
+    <div class="overlay" id="startScreen">
+      <div class="emoji-big">🧺</div>
+      <h2>พร้อมไหม?</h2>
+      <p>
+        ใช้ปุ่ม <span class="kbd">←</span> <span class="kbd">→</span> เลื่อนตะกร้า<br>
+        ปล่อยลูกอมตกพื้นจะเสีย <b>1 หัวใจ</b><br>
+        ทุก <b>100 คะแนน</b> ลูกอมจะตกเร็วขึ้น <b>10%</b> ⚡
+      </p>
+
+      <!-- คำอธิบายไอเทมแต่ละชนิด -->
+      <div class="legend">
+        <div class="legend-item">🍬 +10</div>
+        <div class="legend-item gold"><span class="dot dot-gold"></span> +50</div>
+        <div class="legend-item bomb"><span class="dot dot-bomb"></span> −1 ❤️</div>
+      </div>
+      <p style="font-size:0.85rem">ระเบิดตกพื้นได้ ไม่เสียหัวใจ แต่ห้ามรับ!</p>
+      <button class="btn" id="startBtn">▶ Start Game</button>
+    </div>
+
+    <!-- หน้าจอ Game Over -->
+    <div class="overlay hidden" id="gameOverScreen">
+      <div class="emoji-big">🍰</div>
+      <h2>Game Over</h2>
+      <div class="final-score">คะแนนรวม <span id="finalScore">0</span></div>
+      <div class="final-level" id="finalLevel">ไปถึง Level 1</div>
+      <button class="btn" id="restartBtn">↻ Restart Game</button>
+    </div>
+  </div>
+
+  <p class="hint">Tip: กด Enter หรือ Space เพื่อเริ่มเกมได้เลย</p>
+
+  <script>
+    /* =========================================================
+       JavaScript — ตรรกะของเกม
+       ========================================================= */
+
+    // ---------- 1) อ้างอิง DOM element ----------
+    const canvas         = document.getElementById('gameCanvas');
+    const ctx            = canvas.getContext('2d');
+    const wrapper        = document.getElementById('gameWrapper');
+    const damageFlash    = document.getElementById('damageFlash');
+    const scoreText      = document.getElementById('scoreText');
+    const livesText      = document.getElementById('livesText');
+    const startScreen    = document.getElementById('startScreen');
+    const gameOverScreen = document.getElementById('gameOverScreen');
+    const finalScore     = document.getElementById('finalScore');
+    const finalLevel     = document.getElementById('finalLevel');
+    const startBtn       = document.getElementById('startBtn');
+    const restartBtn     = document.getElementById('restartBtn');
+
+    const WIDTH  = canvas.width;   // 400
+    const HEIGHT = canvas.height;  // 600
+
+    // ---------- 2) ค่าตั้งค่าเกม (ปรับความยากได้ที่นี่) ----------
+    const CONFIG = {
+      basketWidth:    90,    // ความกว้างตะกร้า (px)
+      basketHeight:   42,    // ความสูงตะกร้า (px)
+      basketSpeed:    380,   // ความเร็วตะกร้า (px ต่อวินาที)
+      candyRadius:    16,    // รัศมีลูกอม (px)
+      candySpeed:     160,   // ความเร็วตกเริ่มต้น (px ต่อวินาที)
+      spawnInterval:  950,   // ระยะเวลาระหว่างลูกอมแต่ละลูก (ms)
+      pointsPerCandy: 10,    // คะแนนต่อการรับ 1 ลูก
+      startLives:     3,     // พลังชีวิตเริ่มต้น
+
+      // ----- ไอเทมพิเศษ -----
+      goldenChance:   0.10,  // โอกาสเกิดลูกอมสีทอง 10%
+      goldenPoints:   50,    // คะแนนเมื่อรับลูกอมสีทอง
+      bombChance:     0.15,  // โอกาสเกิดระเบิด 15%
+
+      // ----- ระบบ Progression -----
+      pointsPerLevel: 100,   // ทุก ๆ 100 คะแนน = ขึ้น 1 Level
+      speedIncrease:  0.10   // แต่ละ Level ลูกอมตกเร็วขึ้น 10%
+    };
+
+    // อีโมจิลูกอม (สุ่มเลือกตอนสร้าง)
+    const CANDY_TYPES = ['🍬', '🍭', '🍩', '🧁', '🍪', '🍓', '🍫'];
+
+    // ---------- 3) สถานะของเกม (State) ----------
+    const state = {
+      running:      false,
+      score:        0,
+      lives:        CONFIG.startLives,
+      candies:      [],          // ลูกอมที่กำลังตก
+      popups:       [],          // ข้อความ "+10" ลอยขึ้น
+      spawnTimer:   0,           // ตัวจับเวลาสร้างลูกอม (ms)
+      lastTime:     0,           // timestamp ของเฟรมก่อนหน้า
+      level:        1,           // Level ปัจจุบัน
+      currentSpeed: CONFIG.candySpeed, // ความเร็วตกที่ใช้จริงในขณะนี้ (px/s)
+      levelUpTimer: 0,           // เวลาที่เหลือในการแสดงป้าย "LEVEL UP!" (วินาที)
+      keys:         { left: false, right: false },
+      basket: {
+        x: (WIDTH - CONFIG.basketWidth) / 2,
+        y: HEIGHT - CONFIG.basketHeight - 14,
+        w: CONFIG.basketWidth,
+        h: CONFIG.basketHeight
+      }
+    };
+
+    // จุดตกแต่งพื้นหลัง (สร้างครั้งเดียว ไม่ต้องสุ่มใหม่ทุกเฟรม)
+    const BG_DOTS = Array.from({ length: 22 }, () => ({
+      x: Math.random() * WIDTH,
+      y: Math.random() * HEIGHT,
+      r: 3 + Math.random() * 7,
+      color: ['#ffd6e5', '#d7ecff', '#e8dcf2', '#d9fbe0'][Math.floor(Math.random() * 4)]
+    }));
+
+    // =========================================================
+    // 4) ระบบควบคุม (Input) — ปุ่มลูกศรซ้าย/ขวา
+    // =========================================================
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowLeft')  { state.keys.left  = true; e.preventDefault(); }
+      if (e.key === 'ArrowRight') { state.keys.right = true; e.preventDefault(); }
+
+      // กด Enter / Space เพื่อเริ่มเกมเมื่อเกมยังไม่ทำงาน
+      if ((e.key === 'Enter' || e.key === ' ') && !state.running) {
+        e.preventDefault();
+        startGame();
+      }
+    });
+
+    document.addEventListener('keyup', (e) => {
+      if (e.key === 'ArrowLeft')  state.keys.left  = false;
+      if (e.key === 'ArrowRight') state.keys.right = false;
+    });
+
+    // ป้องกันปุ่ม "ค้าง" เมื่อผู้เล่นสลับหน้าต่าง
+    window.addEventListener('blur', () => {
+      state.keys.left = state.keys.right = false;
+    });
+
+    startBtn.addEventListener('click', startGame);
+    restartBtn.addEventListener('click', startGame);
+
+    // =========================================================
+    // 5) ฟังก์ชันควบคุมวงจรเกม (เริ่ม / จบ)
+    // =========================================================
+
+    /** รีเซ็ตทุกอย่างแล้วเริ่มเกมใหม่ */
+    function startGame() {
+      if (state.running) return;   // กันกดเริ่มซ้อนกัน
+
+      state.score        = 0;
+      state.lives        = CONFIG.startLives;
+      state.level        = 1;
+      state.currentSpeed = CONFIG.candySpeed;
+      state.levelUpTimer = 0;
+      state.candies      = [];
+      state.popups       = [];
+      state.spawnTimer   = CONFIG.spawnInterval; // ให้ลูกแรกตกทันที
+      state.basket.x     = (WIDTH - state.basket.w) / 2;
+      state.keys.left    = state.keys.right = false;
+
+      updateHUD();
+      startScreen.classList.add('hidden');
+      gameOverScreen.classList.add('hidden');
+
+      state.running  = true;
+      state.lastTime = performance.now();
+      requestAnimationFrame(gameLoop);
+    }
+
+    /** หยุดเกมและแสดงหน้าจอ Game Over */
+    function gameOver() {
+      state.running = false;
+      finalScore.textContent = state.score;
+      finalLevel.textContent = `ไปถึง Level ${state.level} ⚡`;
+      gameOverScreen.classList.remove('hidden');
+      restartBtn.focus();
+    }
+
+    // =========================================================
+    // 6) Game Loop — หัวใจของเกม
+    //    เรียกซ้ำทุกเฟรม: คำนวณ dt -> update() -> render()
+    // =========================================================
+    function gameLoop(timestamp) {
+      if (!state.running) return;
+
+      // dt = เวลาที่ผ่านไปตั้งแต่เฟรมก่อน (วินาที)
+      // จำกัดไม่เกิน 0.05 วินาที กันลูกอม "วาร์ป" เมื่อสลับแท็บแล้วกลับมา
+      const dt = Math.min((timestamp - state.lastTime) / 1000, 0.05);
+      state.lastTime = timestamp;
+
+      update(dt);
+      render();
+
+      if (state.running) requestAnimationFrame(gameLoop);
+    }
+
+    // =========================================================
+    // 7) update(dt) — อัปเดตตำแหน่งและตรรกะทั้งหมด
+    // =========================================================
+    function update(dt) {
+      updateBasket(dt);
+      spawnCandies(dt);
+      updateCandies(dt);
+      updatePopups(dt);
+      state.levelUpTimer = Math.max(0, state.levelUpTimer - dt);
+    }
+
+    /** เลื่อนตะกร้าตามปุ่มที่กดค้าง และไม่ให้หลุดขอบจอ */
+    function updateBasket(dt) {
+      const b = state.basket;
+      // direction: -1 = ซ้าย, 0 = หยุด, +1 = ขวา
+      const direction = (state.keys.right ? 1 : 0) - (state.keys.left ? 1 : 0);
+
+      b.x += direction * CONFIG.basketSpeed * dt;
+      b.x = Math.max(0, Math.min(WIDTH - b.w, b.x)); // clamp ให้อยู่ในจอ
+    }
+
+    /** สร้างลูกอมใหม่ตามช่วงเวลาที่กำหนด */
+    function spawnCandies(dt) {
+      state.spawnTimer += dt * 1000;
+
+      if (state.spawnTimer >= CONFIG.spawnInterval) {
+        state.spawnTimer = 0;
+        const r = CONFIG.candyRadius;
+
+        // สุ่มชนิดไอเทมด้วยการทอยตัวเลข 0–1 ครั้งเดียว
+        //   0.00–0.10 → golden (10%)
+        //   0.10–0.25 → bomb   (15%)
+        //   0.25–1.00 → normal (75%)
+        const roll = Math.random();
+        let type = 'normal';
+        if (roll < CONFIG.goldenChance) {
+          type = 'golden';
+        } else if (roll < CONFIG.goldenChance + CONFIG.bombChance) {
+          type = 'bomb';
+        }
+
+        state.candies.push({
+          type: type,                              // 'normal' | 'golden' | 'bomb'
+          x: r + Math.random() * (WIDTH - r * 2), // สุ่มตำแหน่งแนวนอน
+          y: -r,                                   // เริ่มเหนือขอบจอเล็กน้อย
+          r: r,
+          emoji: CANDY_TYPES[Math.floor(Math.random() * CANDY_TYPES.length)],
+          angle: Math.random() * Math.PI * 2,      // มุมหมุน (เพื่อความน่ารัก)
+          spin: (Math.random() - 0.5) * 3          // ความเร็วหมุน (rad/s)
+        });
+      }
+    }
+
+    /** ขยับลูกอม + ตรวจการชน + ตรวจการตกถึงพื้น */
+    function updateCandies(dt) {
+      // วนจากท้ายมาหน้า เพื่อให้ลบ element ระหว่างวนได้อย่างปลอดภัย
+      for (let i = state.candies.length - 1; i >= 0; i--) {
+        const c = state.candies[i];
+
+        // ฟิสิกส์การตก: ความเร็วคงที่ภายใน Level (เปลี่ยนเมื่อขึ้น Level)
+        c.y     += state.currentSpeed * dt;
+        c.angle += c.spin * dt;
+
+        // (ก) ตะกร้ารับไอเทมได้ -> ผลลัพธ์ขึ้นกับชนิด
+        if (isCircleRectColliding(c, state.basket)) {
+          state.candies.splice(i, 1);
+
+          if (c.type === 'bomb') {
+            hitBomb(c.x, state.basket.y);                      // −1 ชีวิตทันที
+            if (!state.running) return;
+          } else if (c.type === 'golden') {
+            addScore(CONFIG.goldenPoints, c.x, state.basket.y, '#e0a800'); // +50
+          } else {
+            addScore(CONFIG.pointsPerCandy, c.x, state.basket.y, '#ff8fab'); // +10
+          }
+          continue;
+        }
+
+        // (ข) ไอเทมแตะขอบล่างของจอ
+        if (c.y + c.r >= HEIGHT) {
+          state.candies.splice(i, 1);
+
+          // ปล่อยระเบิดตกพื้นได้โดยไม่เสียหัวใจ (หลบระเบิด = เล่นถูกต้อง)
+          if (c.type !== 'bomb') {
+            loseLife();
+            if (!state.running) return; // หยุดทันทีถ้าเกมจบแล้ว
+          }
+        }
+      }
+    }
+
+    /** ข้อความ +10 ลอยขึ้นและจางหายไป */
+    function updatePopups(dt) {
+      for (let i = state.popups.length - 1; i >= 0; i--) {
+        const p = state.popups[i];
+        p.y    -= 50 * dt;
+        p.life -= dt;
+        if (p.life <= 0) state.popups.splice(i, 1);
+      }
+    }
+
+    // =========================================================
+    // 8) ระบบตรวจสอบการชน (Collision Detection)
+    //    วงกลม (ลูกอม) vs สี่เหลี่ยม (ตะกร้า)
+    // =========================================================
+    function isCircleRectColliding(circle, rect) {
+      // หาจุดบนสี่เหลี่ยมที่ "ใกล้จุดศูนย์กลางวงกลมที่สุด"
+      const closestX = Math.max(rect.x, Math.min(circle.x, rect.x + rect.w));
+      const closestY = Math.max(rect.y, Math.min(circle.y, rect.y + rect.h));
+
+      // ระยะจากจุดศูนย์กลางวงกลมถึงจุดนั้น
+      const dx = circle.x - closestX;
+      const dy = circle.y - closestY;
+
+      // ชนกันถ้าระยะ <= รัศมี (เทียบกำลังสอง เลี่ยงการใช้ Math.sqrt)
+      return dx * dx + dy * dy <= circle.r * circle.r;
+    }
+
+    // =========================================================
+    // 9) คะแนนและพลังชีวิต
+    // =========================================================
+    /**
+     * เพิ่มคะแนน + สร้างข้อความลอยขึ้น
+     * @param {number} points - คะแนนที่ได้ (10 หรือ 50)
+     * @param {string} color  - สีของข้อความ popup
+     */
+    function addScore(points, x, y, color) {
+      state.score += points;
+      state.popups.push({ x, y, life: 0.8, text: `+${points}`, color, big: points > CONFIG.pointsPerCandy });
+      updateHUD();
+      bump(scoreText);
+      checkLevelUp(); // คะแนนก้อนใหญ่ (+50) อาจข้ามได้หลาย Level ฟังก์ชันนี้รองรับแล้ว
+    }
+
+    /** ตะกร้ารับระเบิด: แสดงข้อความแล้วเสียชีวิต 1 หน่วย */
+    function hitBomb(x, y) {
+      state.popups.push({ x, y, life: 0.8, text: '💥 −1', color: '#3a3a3a', big: true });
+      loseLife();
+    }
+
+    function loseLife() {
+      state.lives--;
+      updateHUD();
+      bump(livesText);
+
+      // Screen shake + แฟลชแดง (ลบ class ก่อนเพื่อให้เล่นซ้ำได้ทุกครั้ง)
+      restartAnimation(wrapper, 'shake');
+      restartAnimation(damageFlash, 'active');
+
+      if (state.lives <= 0) gameOver();
+    }
+
+    /** เล่นแอนิเมชัน CSS ซ้ำได้ แม้ class เดิมยังค้างอยู่ */
+    function restartAnimation(el, className) {
+      el.classList.remove(className);
+      void el.offsetWidth; // บังคับ reflow ให้เบราว์เซอร์รู้ว่า class ถูกลบแล้ว
+      el.classList.add(className);
+    }
+
+    /** อัปเดตตัวเลขคะแนนและหัวใจบน HUD */
+    function updateHUD() {
+      scoreText.textContent = state.score;
+      const alive = Math.max(0, state.lives);
+      livesText.textContent = '❤️'.repeat(alive) + '🤍'.repeat(CONFIG.startLives - alive);
+    }
+
+    /** เอฟเฟกต์เด้งเล็ก ๆ ให้ HUD */
+    function bump(el) {
+      el.classList.remove('pop');
+      void el.offsetWidth;
+      el.classList.add('pop');
+    }
+
+    // =========================================================
+    // 10) ระบบความก้าวหน้า (Progression)
+    //     level        = floor(score / 100) + 1
+    //     currentSpeed = baseSpeed × (1.10)^(level − 1)
+    // =========================================================
+
+    /**
+     * ตรวจว่าคะแนนถึงเกณฑ์ขึ้น Level หรือยัง
+     * ถ้าถึง: เพิ่ม Level + คำนวณความเร็วใหม่ + แสดงป้าย LEVEL UP!
+     */
+    function checkLevelUp() {
+      // Level ที่ "ควรเป็น" ตามคะแนนปัจจุบัน
+      const targetLevel = Math.floor(state.score / CONFIG.pointsPerLevel) + 1;
+
+      if (targetLevel > state.level) {
+        state.level = targetLevel;
+
+        // คำนวณจากสูตรตรง ๆ (ไม่คูณสะสม) เพื่อไม่ให้ทศนิยมคลาดเคลื่อน
+        state.currentSpeed =
+          CONFIG.candySpeed * Math.pow(1 + CONFIG.speedIncrease, state.level - 1);
+
+        state.levelUpTimer = 1.5; // แสดงป้าย 1.5 วินาที
+      }
+    }
+
+    // =========================================================
+    // 11) render() — วาดทุกอย่างลง canvas
+    // =========================================================
+    function render() {
+      drawBackground();
+      state.candies.forEach(drawCandy);
+      drawBasket(state.basket);
+      drawPopups();
+      drawLevelInfo();   // วาดทีหลังสุดให้อยู่บนสุด
+    }
+
+    /** พื้นหลังไล่สีพาสเทล + จุดลายน่ารัก + พื้นหญ้า */
+    function drawBackground() {
+      const grad = ctx.createLinearGradient(0, 0, 0, HEIGHT);
+      grad.addColorStop(0, '#fde2ef');
+      grad.addColorStop(1, '#e3f1ff');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+      BG_DOTS.forEach(d => {
+        ctx.fillStyle = d.color;
+        ctx.beginPath();
+        ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // พื้นด้านล่างสีมิ้นต์
+      ctx.fillStyle = '#c8f2d4';
+      ctx.fillRect(0, HEIGHT - 8, WIDTH, 8);
+    }
+
+    /** เลือกวิธีวาดตามชนิดของไอเทม */
+    function drawCandy(c) {
+      if (c.type === 'golden')    drawGoldenCandy(c);
+      else if (c.type === 'bomb') drawBomb(c);
+      else                        drawNormalCandy(c);
+    }
+
+    /** ลูกอมทอง: วงกลมไล่สีทอง + เรืองแสง + กระดาษห่อสองข้าง + ประกายวิบวับ */
+    function drawGoldenCandy(c) {
+      const now   = performance.now();
+      const pulse = 1 + Math.sin(now / 150) * 0.08; // เต้นเบา ๆ ให้สะดุดตา
+
+      ctx.save();
+      ctx.translate(c.x, c.y);
+
+      // กระดาษห่อสองข้าง (หมุนตาม angle)
+      ctx.save();
+      ctx.rotate(c.angle);
+      ctx.fillStyle = '#ffcf33';
+      [-1, 1].forEach(side => {
+        ctx.beginPath();
+        ctx.moveTo(side * c.r * 0.8, 0);
+        ctx.lineTo(side * c.r * 1.6, -c.r * 0.6);
+        ctx.lineTo(side * c.r * 1.6,  c.r * 0.6);
+        ctx.closePath();
+        ctx.fill();
+      });
+      ctx.restore();
+
+      // ตัวลูกอม + แสงเรือง
+      ctx.shadowColor = 'rgba(255, 200, 40, 0.95)';
+      ctx.shadowBlur  = 18;
+      const g = ctx.createRadialGradient(-c.r * 0.35, -c.r * 0.35, 2, 0, 0, c.r);
+      g.addColorStop(0,   '#fff6c2');
+      g.addColorStop(0.5, '#ffd447');
+      g.addColorStop(1,   '#e0a800');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0, 0, c.r * pulse, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // จุดสะท้อนแสงสีขาว
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+      ctx.beginPath();
+      ctx.ellipse(-c.r * 0.35, -c.r * 0.4, c.r * 0.28, c.r * 0.16, -0.6, 0, Math.PI * 2);
+      ctx.fill();
+
+      // ประกายวิบวับหมุนรอบลูกอม
+      ctx.font = '12px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const a = now / 300;
+      ctx.fillText('✨', Math.cos(a) * c.r * 1.4, Math.sin(a) * c.r * 1.4);
+
+      ctx.restore();
+    }
+
+    /** ระเบิด: วงกลมสีดำ + ฝาครอบ + ชนวน + ประกายไฟกะพริบ */
+    function drawBomb(c) {
+      ctx.save();
+      ctx.translate(c.x, c.y);
+      ctx.rotate(Math.sin(c.angle) * 0.25); // โยกซ้ายขวาเล็กน้อย
+
+      // ชนวน (เส้นโค้ง)
+      ctx.strokeStyle = '#8b6b4a';
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(0, -c.r - 2);
+      ctx.quadraticCurveTo(4, -c.r - 12, 10, -c.r - 10);
+      ctx.stroke();
+
+      // ประกายไฟปลายชนวน (ขนาดสุ่มทุกเฟรม = กะพริบ)
+      const flicker = 3 + Math.random() * 2.5;
+      ctx.fillStyle = '#ffb703';
+      ctx.beginPath();
+      ctx.arc(10, -c.r - 10, flicker, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff3b0';
+      ctx.beginPath();
+      ctx.arc(10, -c.r - 10, flicker * 0.45, 0, Math.PI * 2);
+      ctx.fill();
+
+      // ฝาครอบชนวน
+      ctx.fillStyle = '#4a4a4a';
+      roundRect(-6, -c.r - 5, 12, 8, 2);
+      ctx.fill();
+
+      // ตัวระเบิดสีดำ
+      const g = ctx.createRadialGradient(-c.r * 0.35, -c.r * 0.35, 2, 0, 0, c.r);
+      g.addColorStop(0, '#666666');
+      g.addColorStop(1, '#141414');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0, 0, c.r, 0, Math.PI * 2);
+      ctx.fill();
+
+      // จุดสะท้อนแสง
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.beginPath();
+      ctx.ellipse(-c.r * 0.35, -c.r * 0.35, c.r * 0.25, c.r * 0.15, -0.6, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    /** ลูกอมธรรมดา: วาดด้วยอีโมจิ (หมุนได้เล็กน้อย) */
+    function drawNormalCandy(c) {
+      ctx.save();
+      ctx.translate(c.x, c.y);
+      ctx.rotate(c.angle);
+      ctx.font = `${c.r * 2}px "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(c.emoji, 0, 2);
+      ctx.restore();
+    }
+
+    /** วาดตะกร้าสานสีชมพู */
+    function drawBasket(b) {
+      // เงาใต้ตะกร้า
+      ctx.fillStyle = 'rgba(109, 90, 114, 0.12)';
+      ctx.beginPath();
+      ctx.ellipse(b.x + b.w / 2, b.y + b.h + 4, b.w / 2, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // ตัวตะกร้า
+      ctx.fillStyle = '#ffb3c7';
+      roundRect(b.x, b.y + 6, b.w, b.h - 6, 12);
+      ctx.fill();
+
+      // ลายสาน (เส้นตั้ง)
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+      ctx.lineWidth = 2;
+      for (let lx = b.x + 14; lx < b.x + b.w - 6; lx += 14) {
+        ctx.beginPath();
+        ctx.moveTo(lx, b.y + 12);
+        ctx.lineTo(lx, b.y + b.h - 4);
+        ctx.stroke();
+      }
+
+      // ขอบปากตะกร้า
+      ctx.fillStyle = '#ff8fab';
+      roundRect(b.x - 4, b.y, b.w + 8, 12, 6);
+      ctx.fill();
+
+      // หัวใจตกแต่งตรงกลาง
+      ctx.font = '14px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('💗', b.x + b.w / 2, b.y + b.h / 2 + 6);
+    }
+
+    /** วาดข้อความ +10 ที่ค่อย ๆ จางหาย */
+    function drawPopups() {
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.lineJoin = 'round';
+      state.popups.forEach(p => {
+        ctx.globalAlpha = Math.max(0, p.life / 0.8);
+        ctx.font = p.big ? 'bold 28px Mali, sans-serif' : 'bold 20px Mali, sans-serif';
+        // ขอบขาวช่วยให้อ่านง่ายบนพื้นหลังทุกสี
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = '#ffffff';
+        ctx.strokeText(p.text, p.x, p.y);
+        ctx.fillStyle = p.color;
+        ctx.fillText(p.text, p.x, p.y);
+      });
+      ctx.globalAlpha = 1;
+    }
+
+    /** วาด Level ปัจจุบันมุมซ้ายบน และป้าย LEVEL UP! กลางจอ */
+    function drawLevelInfo() {
+      // ป้าย Level เล็ก ๆ ใต้ HUD
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.font = 'bold 15px Mali, sans-serif';
+      ctx.fillStyle = 'rgba(109, 90, 114, 0.75)';
+      ctx.fillText(`Lv. ${state.level}  ·  ⚡ ${Math.round(state.currentSpeed)} px/s`, 18, 64);
+
+      // ป้าย LEVEL UP! (ขยายแล้วค่อย ๆ จาง)
+      if (state.levelUpTimer > 0) {
+        const t     = state.levelUpTimer / 1.5;     // 1 → 0
+        const scale = 1 + (1 - t) * 0.3;            // ใหญ่ขึ้นเล็กน้อย
+        const sub   = `Level ${state.level} · ลูกอมเร็วขึ้น 10%!`;
+
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, t * 1.5);
+        ctx.translate(WIDTH / 2, HEIGHT / 2 - 40);
+        ctx.scale(scale, scale);
+        ctx.textAlign = 'center';
+        ctx.lineJoin = 'round';
+
+        ctx.font = 'bold 40px Mali, sans-serif';
+        ctx.lineWidth = 6;
+        ctx.strokeStyle = '#ffffff';
+        ctx.strokeText('LEVEL UP!', 0, 0);
+        ctx.fillStyle = '#ff8fab';
+        ctx.fillText('LEVEL UP!', 0, 0);
+
+        ctx.font = 'bold 18px Mali, sans-serif';
+        ctx.lineWidth = 4;
+        ctx.strokeText(sub, 0, 36);
+        ctx.fillStyle = '#7fb8f0';
+        ctx.fillText(sub, 0, 36);
+        ctx.restore();
+      }
+    }
+
+    /** helper วาดสี่เหลี่ยมมุมโค้ง (รองรับเบราว์เซอร์รุ่นเก่า) */
+    function roundRect(x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y,     x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x,     y + h, r);
+      ctx.arcTo(x,     y + h, x,     y,     r);
+      ctx.arcTo(x,     y,     x + w, y,     r);
+      ctx.closePath();
+    }
+
+    // ---------- วาดฉากแรกไว้ด้านหลังหน้า Start ----------
+    updateHUD();
+    render();
+  </script>
+</body>
+</html>
